@@ -68,6 +68,11 @@ namespace HoloLensCameraStream
             throw new NotImplementedException();
         }
 
+        public void TakePhotoAsync()
+        {
+            throw new NotImplementedException();
+        }
+
         public void RequestNextFrameSample(FrameSampleAcquiredCallback onFrameSampleAcquired)
         {
             throw new NotImplementedException();

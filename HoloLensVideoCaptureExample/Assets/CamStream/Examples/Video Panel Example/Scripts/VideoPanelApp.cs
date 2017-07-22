@@ -61,6 +61,7 @@ public class VideoPanelApp : MonoBehaviour
         CameraStreamHelper.Instance.SetNativeISpatialCoordinateSystemPtr(_spatialCoordinateSystemPtr);
 
         _resolution = CameraStreamHelper.Instance.GetLowestResolution();
+        // _resolution = CameraStreamHelper.Instance.GetHighestResolution();
         float frameRate = CameraStreamHelper.Instance.GetHighestFrameRate(_resolution);
         videoCapture.FrameSampleAcquired += OnFrameSampleAcquired;
 

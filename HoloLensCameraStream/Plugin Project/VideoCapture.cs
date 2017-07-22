@@ -18,8 +18,10 @@ using Windows.Perception.Spatial;
 using Windows.Foundation.Collections;
 using Windows.Foundation;
 using System.Diagnostics;
-
-
+using Windows.Storage.Streams;
+using Windows.Storage;
+using Windows.Storage.FileProperties;
+using Windows.Graphics.Imaging;
 
 namespace HoloLensCameraStream
 {
@@ -128,6 +130,8 @@ namespace HoloLensCameraStream
         DeviceInformation _deviceInfo;
         MediaCapture _mediaCapture;
         MediaFrameReader _frameReader;
+
+        CameraRotationHelper _rotationHelper;
         
         VideoCapture(MediaFrameSourceGroup frameSourceGroup, MediaFrameSourceInfo frameSourceInfo, DeviceInformation deviceInfo)
         {
@@ -172,6 +176,8 @@ namespace HoloLensCameraStream
 
             var videoCapture = new VideoCapture(selectedFrameSourceGroup, selectedFrameSourceInfo, deviceInformation);
             await videoCapture.CreateMediaCaptureAsync();
+
+            
             onCreatedCallback?.Invoke(videoCapture);
         }
 
@@ -248,16 +254,24 @@ namespace HoloLensCameraStream
             VideoEncodingProperties properties = GetVideoEncodingPropertiesForCameraParams(setupParams);
 
             // Historical context: https://github.com/VulcanTechnologies/HoloLensCameraStream/issues/6
+            /*
             if (setupParams.rotateImage180Degrees)
             {
                 properties.Properties.Add(ROTATION_KEY, 180);
             }
-			
+            */
+
+            // 向きの制御
+            // var rotation = _rotationHelper.GetCameraPreviewOrientation();
+            // properties.Properties.Add(ROTATION_KEY, CameraRotationHelper.ConvertSimpleOrientationToClockwiseDegrees(rotation));
+            
 			//	gr: taken from here https://forums.hololens.com/discussion/2009/mixedrealitycapture
 			IVideoEffectDefinition ved = new VideoMRCSettings( setupParams.enableHolograms, setupParams.enableVideoStabilization, setupParams.videoStabilizationBufferSize, setupParams.hologramOpacity );
 			await _mediaCapture.AddVideoEffectAsync(ved, MediaStreamType.VideoPreview);
         
             await _mediaCapture.VideoDeviceController.SetMediaStreamPropertiesAsync(STREAM_TYPE, properties);
+
+
 
             onVideoModeStartedCallback?.Invoke(new VideoCaptureResult(0, ResultType.Success, true));
         }
@@ -302,6 +316,42 @@ namespace HoloLensCameraStream
                 _frameReader.FrameArrived -= handler;
             };
             _frameReader.FrameArrived += handler;
+        }
+
+        public async Task TakePhotoAsync()
+        {
+            var stream = new InMemoryRandomAccessStream();
+            await _mediaCapture.CapturePhotoToStreamAsync(ImageEncodingProperties.CreateJpeg(), stream);
+
+            try
+            {
+                var folder = KnownFolders.CameraRoll;
+                var file = await folder.CreateFileAsync("pict.jpg", CreationCollisionOption.GenerateUniqueName);
+
+                // var photoOrientation = CameraRotationHelper.ConvertSimpleOrientationToPhotoOrientation(_rotationHelper.GetCameraCaptureOrientation());
+                // await ReencodeAndSavePhotoAsync(stream, file, photoOrientation);
+                await _mediaCapture.CapturePhotoToStorageFileAsync(ImageEncodingProperties.CreatePng(), file);
+            } catch(Exception ex)
+            {
+                return;
+            }
+        }
+
+        private static async Task ReencodeAndSavePhotoAsync(IRandomAccessStream stream, StorageFile file, PhotoOrientation photoOrientation)
+        {
+            using (var inputStream = stream)
+            {
+                var decoder = await BitmapDecoder.CreateAsync(inputStream);
+                using (var outputStream = await file.OpenAsync(FileAccessMode.ReadWrite))
+                {
+                    var encoder = await BitmapEncoder.CreateForTranscodingAsync(outputStream, decoder);
+
+                    var properties = new BitmapPropertySet { { "System.Photo.Orientation", new BitmapTypedValue(photoOrientation, PropertyType.UInt16) } };
+
+                    await encoder.BitmapProperties.SetPropertiesAsync(properties);
+                    await encoder.FlushAsync();
+                }
+            }
         }
 
         /// <summary>
@@ -356,6 +406,14 @@ namespace HoloLensCameraStream
                 StreamingCaptureMode = StreamingCaptureMode.Video
             });
             _mediaCapture.VideoDeviceController.Focus.TrySetAuto(true);
+
+            // _rotationHelper = new CameraRotationHelper(_deviceInfo.EnclosureLocation);
+            // _rotationHelper.OrientationChanged += RotationHelper_OrientationChanged;
+        }
+
+        private void RotationHelper_OrientationChanged(object sender, bool e)
+        {
+            
         }
 
         void HandleFrameArrived(MediaFrameReader sender, MediaFrameArrivedEventArgs args)

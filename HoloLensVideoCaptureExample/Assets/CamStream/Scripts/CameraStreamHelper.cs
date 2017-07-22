@@ -63,6 +63,14 @@ public class CameraStreamHelper : MonoBehaviour
         return videoCapture.GetSupportedResolutions().OrderBy((r) => r.width * r.height).FirstOrDefault();
     }
 
+    public void TakePicture()
+    {
+        if(videoCapture != null)
+        {
+            videoCapture.TakePhotoAsync();
+        }
+    }
+
     public float GetHighestFrameRate(HoloLensCameraStream.Resolution forResolution)
     {
         if (videoCapture == null)
